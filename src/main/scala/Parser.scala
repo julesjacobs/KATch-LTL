@@ -51,19 +51,48 @@ object Parser {
 
   /** AST for LTL formulas */
   class LTL 
-  case object LTLTrue extends LTL 
-  case object LTLFalse extends LTL
+  case object LTLTrue extends LTL {
+    override def toString: String = "true"
+  }
+
+  case object LTLFalse extends LTL {
+    override def toString: String = "true"
+  }
   // We allow NetKAT expressions to appear in the syntax for LTL formulas 
   // (for parsing purposes it seems most straightforward to use the same `NK` datatype, 
   // but perhaps we should restrict this to just the Boolean subalgebra?)
-  case class LTLNK(e: NK) extends LTL
-  case class LTLAnd(q1: LTL, q2: LTL) extends LTL 
-  case class LTLOr(q1: LTL, q2: LTL) extends LTL 
-  case class LTLNot(q: LTL) extends LTL 
-  case class Next(q: LTL) extends LTL
-  case class Until(q1: LTL, q2: LTL) extends LTL
-  case class Eventually(q: LTL) extends LTL 
-  case class Always(q: LTL) extends LTL
+  case class LTLNK(e: NK) extends LTL {
+    override def toString: String = s"$e"
+  }
+
+  case class LTLAnd(q1: LTL, q2: LTL) extends LTL {
+    override def toString: String = s"(($q1)∧($q2))"
+  }
+
+  case class LTLOr(q1: LTL, q2: LTL) extends LTL {
+    override def toString: String = s"(($q1)∨($q2))"
+  }
+
+  case class LTLNot(q: LTL) extends LTL {
+    override def toString: String = s"¬$q"
+  }
+
+  case class Until(q1: LTL, q2: LTL) extends LTL {
+    override def toString: String = s"(($q1)𝐔($q2))"
+  }
+
+  case class Next(q: LTL) extends LTL {
+    override def toString: String = s"𝐗$q"
+  }
+
+  case class Eventually(q: LTL) extends LTL {
+    override def toString: String = s"𝐅$q"
+  }
+
+  case class Always(q: LTL) extends LTL {
+    override def toString: String = s"𝐆$q"
+  }
+
 
   /** Negates the given NetKAT expression.
     *
@@ -210,6 +239,7 @@ object Parser {
   enum Expr:
     case NKExpr(nk: NK)
     case ValExpr(v: SVal)
+    case LTLExpr(ltl: LTL)
 
   enum Stmt:
     case Check(op: String, e1: Expr, e2: Expr)
@@ -250,7 +280,7 @@ object Parser {
   def valExpr[$: P]: P[SVal] = P(integer.map(Left.apply) | varName.map(Right.apply))
 
   // Parses an Expr
-  def expr[$: P]: P[Expr] = P(exprNK.map(Expr.NKExpr.apply) | valExpr.map(Expr.ValExpr.apply))
+  def expr[$: P]: P[Expr] = P(exprNK.map(Expr.NKExpr.apply) | valExpr.map(Expr.ValExpr.apply) | exprLTL.map(Expr.LTLExpr.apply))
 
   // Parses a let statement
   def letStmt[$: P]: P[Stmt.Let] = P(varName ~ "=" ~ expr).map(Stmt.Let.apply)
