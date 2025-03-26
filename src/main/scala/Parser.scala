@@ -48,6 +48,16 @@ object Parser {
   case class Forall(x: Var, e: NK) extends NK
   case class VarName(x: String) extends NK
 
+  /** AST for LTL formulas */
+  class LTL 
+  case object True extends LTL 
+  case object False extends LTL
+  case class And(q1: LTL, q2: LTL) extends LTL 
+  case class Or(q1: LTL, q2: LTL) extends LTL 
+  case class Not(q: LTL) extends LTL 
+  case class Next(q: LTL) extends LTL
+  case class Until(q1: LTL, q2: LTL) extends LTL
+
   /** Negates the given NetKAT expression.
     *
     * @param e
