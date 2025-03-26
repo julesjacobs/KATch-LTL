@@ -163,12 +163,12 @@ object Parser {
   /*                         Parsers for LTL formulae                         */
   /* ------------------------------------------------------------------------ */
 
-  // Top-level parser for LTL formulae 
-  def ltlParser[$: P]: P[LTL] = P( orExpr )
+  // Top-level parser for LTL expressions 
+  // (we begin by parsing sequences of disjunctions, since ∨ binds least tightly)
+  def exprLTL[$: P]: P[LTL] = P( orExpr )
   
-  // Binary operators with precedence (∧ binds tighter than ∨)
-
-  // Parses a sequence of disjunctions
+  // Parses a sequence of disjunctions, where each disjunct is an andExpr
+  // (since ∧ binds more tightly than ∨)
   def orExpr[$: P]: P[LTL] = P( andExpr ~ (("||" | "∨") ~ andExpr).rep ).map {
     case (first, rest) => rest.foldLeft(first) { case (acc, right) => LTLOr(acc, right) }
   }
@@ -182,9 +182,7 @@ object Parser {
   def unaryOrUntilExpr[$: P]: P[LTL] = P(untilExpr | unaryExpr)
   
   // Parses an expression of the form `q1 U q2`
-  def untilExpr[$: P]: P[LTL] = P( 
-    ltlAtom ~ ("U" ~ ltlAtom)
-  ).map {
+  def untilExpr[$: P]: P[LTL] = P( ltlAtom ~ ("U" ~ ltlAtom) ).map {
     case (q1, q2) => Until(q1, q2)
   }
 
@@ -251,7 +249,7 @@ object Parser {
   def valExpr[$: P]: P[SVal] = P(integer.map(Left.apply) | varName.map(Right.apply))
 
   // Parses an Expr
-  def expr[$: P]: P[Expr] = P(exprNK.map(Expr.NKExpr.apply) | valExpr.map(Expr.ValExpr.apply))
+  def expr[$: P]: P[Expr] = P(exprNK.map(Expr.NKExpr.apply) | valExpr.map(Expr.ValExpr.apply) | exprLTL.map(Expr.LTLExpr.apply))
 
   // Parses a let statement
   def letStmt[$: P]: P[Stmt.Let] = P(varName ~ "=" ~ expr).map(Stmt.Let.apply)
