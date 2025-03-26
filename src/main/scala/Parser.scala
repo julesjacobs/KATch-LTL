@@ -210,7 +210,6 @@ object Parser {
   enum Expr:
     case NKExpr(nk: NK)
     case ValExpr(v: SVal)
-    case LTLExpr(ltl: LTL)
 
   enum Stmt:
     case Check(op: String, e1: Expr, e2: Expr)
@@ -220,6 +219,7 @@ object Parser {
     case Let(x: String, e: Expr)
     case Import(path: String)
     case For(x: String, i0: Int, i1: Int, s: Stmt)
+    case CheckLTL(e: NK, ltl: LTL)
 
   // A statement is of one of the following forms:
   // h1 = 3
@@ -227,6 +227,7 @@ object Parser {
   // check ((routing127 ∪ routing2854)⋅top⋅δ)⋆ ≡ (routing127⋅top⋅δ)⋆ ∪ (routing2854⋅top⋅δ)⋆
   // check ((routing127 ∪ routing2854)⋅top⋅δ)⋆ /≡ (routing127⋅top⋅δ)⋆ ∪ (routing2854⋅top⋅δ)⋆
   // check (@sw=h1∧@dst=h54)?⋅((main⋅(top⋅δ))⋆⋅@sw=h54?) ≢ ∅
+  // checkLTL e ⊨ phi, where phi is an LTL formula
   // import "../../examples/trees/ft6_topo.nkpl"
 
   // Parses a check statement
@@ -249,7 +250,7 @@ object Parser {
   def valExpr[$: P]: P[SVal] = P(integer.map(Left.apply) | varName.map(Right.apply))
 
   // Parses an Expr
-  def expr[$: P]: P[Expr] = P(exprNK.map(Expr.NKExpr.apply) | valExpr.map(Expr.ValExpr.apply) | exprLTL.map(Expr.LTLExpr.apply))
+  def expr[$: P]: P[Expr] = P(exprNK.map(Expr.NKExpr.apply) | valExpr.map(Expr.ValExpr.apply))
 
   // Parses a let statement
   def letStmt[$: P]: P[Stmt.Let] = P(varName ~ "=" ~ expr).map(Stmt.Let.apply)
@@ -263,8 +264,13 @@ object Parser {
   // Parses a for statement
   def forStmt[$: P]: P[Stmt.For] = P("for" ~ varName ~ ("=" | "in" | "∈") ~ integer ~ ".." ~ integer ~ "do" ~ stmt).map { case (x, i0, i1, s) => Stmt.For(x, i0, i1, s) }
 
+  // Parses a checkLTL statement
+  def checkLtlStmt[$: P]: P[Stmt.CheckLTL] = P("checkLTL" ~ exprNK ~ "⊨" ~ exprLTL).map { 
+    case (e, phi) => Stmt.CheckLTL(e, phi)
+  }
+
   // Parses a statement
-  def stmt[$: P]: P[Stmt] = P(checkStmt | letStmt | importStmt | runStmt | printStmt | forStmt | graphvizStmt)
+  def stmt[$: P]: P[Stmt] = P(checkStmt | letStmt | importStmt | runStmt | printStmt | forStmt | graphvizStmt | checkLtlStmt)
 
   /** Parses a statement from the given input string.
     *
