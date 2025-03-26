@@ -1,6 +1,7 @@
 package nkpl
 
 import fastparse._, MultiLineWhitespace._
+import scala.compiletime.ops.boolean
 
 /** This object represents a variable map that maps strings to integers and vice versa. This is so that source code can refer to variables by name, but the verifier can refer to them by integer, which is more efficient.
   */
@@ -50,13 +51,19 @@ object Parser {
 
   /** AST for LTL formulas */
   class LTL 
-  case object True extends LTL 
-  case object False extends LTL
-  case class And(q1: LTL, q2: LTL) extends LTL 
-  case class Or(q1: LTL, q2: LTL) extends LTL 
-  case class Not(q: LTL) extends LTL 
+  case object LTLTrue extends LTL 
+  case object LTLFalse extends LTL
+  // We allow NetKAT expressions to appear in the syntax for LTL formulas 
+  // (for parsing purposes it seems most straightforward to use the same `NK` datatype, 
+  // but perhaps we should restrict this to just the Boolean subalgebra?)
+  case class LTLNK(e: NK) extends LTL
+  case class LTLAnd(q1: LTL, q2: LTL) extends LTL 
+  case class LTLOr(q1: LTL, q2: LTL) extends LTL 
+  case class LTLNot(q: LTL) extends LTL 
   case class Next(q: LTL) extends LTL
   case class Until(q1: LTL, q2: LTL) extends LTL
+  case class Eventually(q: LTL) extends LTL 
+  case class Always(q: LTL) extends LTL
 
   /** Negates the given NetKAT expression.
     *
@@ -152,9 +159,60 @@ object Parser {
       P("rangesum" ~ field ~ integer ~ ".." ~ integer).map((x, v1, v2) => rangesum(x, v1, v2)) |
       exprU
 
+  /* ------------------------------------------------------------------------ */
+  /*                         Parsers for LTL formulae                         */
+  /* ------------------------------------------------------------------------ */
+
+  // Top-level parser for LTL formulae 
+  def ltlParser[$: P]: P[LTL] = P( orExpr )
+  
+  // Binary operators with precedence (∧ binds tighter than ∨)
+
+  // Parses a sequence of disjunctions
+  def orExpr[$: P]: P[LTL] = P( andExpr ~ (("||" | "∨") ~ andExpr).rep ).map {
+    case (first, rest) => rest.foldLeft(first) { case (acc, right) => LTLOr(acc, right) }
+  }
+
+  // Parses a sequence of conjunctions
+  def andExpr[$: P]: P[LTL] = P( unaryOrUntilExpr ~ (("&&" | "∧") ~ unaryOrUntilExpr).rep ).map {
+    case (first, rest) => rest.foldLeft(first) { case (acc, right) => LTLAnd(acc, right) }
+  }
+  
+  // Parses an until expression (`q1 U q2`) or a unary operator 
+  def unaryOrUntilExpr[$: P]: P[LTL] = P(untilExpr | unaryExpr)
+  
+  // Parses an expression of the form `q1 U q2`
+  def untilExpr[$: P]: P[LTL] = P( 
+    ltlAtom ~ ("U" ~ ltlAtom)
+  ).map {
+    case (q1, q2) => Until(q1, q2)
+  }
+
+  // Unary operators along with their operand
+  def unaryExpr[$: P]: P[LTL] = P( ("X" | "F" | "G" | "!" | "¬").! ~ ltlAtom).map {
+    case ("X", q) => Next(q)
+    case ("F", q) => Eventually(q)
+    case ("G", q) => Always(q)
+    case ("!", q) => LTLNot(q)
+    case ("¬", q) => LTLNot(q)
+  }
+
+  // Parses an atomic expression, such as a boolean literal or a NK expression  
+  def ltlAtom[$: P]: P[LTL] = P(boolLit | ltlNK)  
+
+  // Parses a NetKAT expression as an atomic predicate in an LTL formula
+  def ltlNK[$: P]: P[LTL] = P(exprNK).map{ e => LTLNK(e) }
+
+  // Parses a boolean literal 
+  def boolLit[$: P]: P[LTL] = P( ("true" | "false").! ).map{ 
+    case "true" => LTLTrue
+    case "false" => LTLFalse
+  }
+
   enum Expr:
     case NKExpr(nk: NK)
     case ValExpr(v: SVal)
+    case LTLExpr(ltl: LTL)
 
   enum Stmt:
     case Check(op: String, e1: Expr, e2: Expr)
